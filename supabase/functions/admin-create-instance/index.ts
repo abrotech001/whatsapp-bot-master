@@ -14,7 +14,7 @@ serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) throw new Error("Unauthorized");
+    if (!authHeader) throw new Error("Unauthorized: Missing authorization header");
 
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -23,13 +23,16 @@ serve(async (req: Request) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
-    if (authErr || !user) throw new Error("Unauthorized");
+    if (authErr || !user) throw new Error("Unauthorized: Invalid token");
+
+    console.log("[Admin-Create] Authenticated user:", user.id);
 
     // Check admin role
     const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
-    if (!isAdmin) throw new Error("Admin access required");
+    if (!isAdmin) throw new Error("Admin access required: User does not have admin role");
 
     const { plan_type, plan_duration_months } = await req.json();
+    console.log("[Admin-Create] Creating instance with plan:", plan_type, "duration:", plan_duration_months);
     
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + (plan_duration_months || 12));
@@ -47,7 +50,12 @@ serve(async (req: Request) => {
       .select()
       .single();
 
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      console.error("[Admin-Create] Insert error:", insertErr);
+      throw insertErr;
+    }
+    
+    console.log("[Admin-Create] Instance created successfully:", instance.id);
 
     return new Response(JSON.stringify({ success: true, instance }), {
       status: 200,

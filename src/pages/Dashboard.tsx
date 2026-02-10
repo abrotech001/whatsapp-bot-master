@@ -125,14 +125,20 @@ const Dashboard = () => {
       const res = await supabase.functions.invoke("pair-instance", {
         body: { instance_id: selectedInstance, phone_number: fullNumber },
       });
-      if (res.error) throw new Error(res.error.message);
+      
+      if (res.error) {
+        throw new Error(res.error.message || "Function invocation failed");
+      }
+      
       const data = res.data as ApiResponse;
-      if (data.pairing_code) {
+      
+      if (data?.pairing_code) {
         setPairingCode(data.pairing_code);
         toast({ title: "Pairing code received!", description: `Code: ${data.pairing_code}` });
         await fetchData();
       } else {
-        throw new Error(data.error || "Failed to get pairing code");
+        const errorMsg = data?.error || "Failed to get pairing code from response";
+        throw new Error(errorMsg);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Pairing failed";
@@ -345,6 +351,11 @@ const Dashboard = () => {
       <Dialog open={pairDialogOpen} onOpenChange={setPairDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Pair WhatsApp Number</DialogTitle></DialogHeader>
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 mb-4">
+              <p className="text-sm text-destructive font-medium">Error: {error}</p>
+            </div>
+          )}
           {pairingCode ? (
             <div className="text-center py-6">
               <p className="text-sm text-muted-foreground mb-2">Your pairing code:</p>
