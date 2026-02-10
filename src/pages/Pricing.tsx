@@ -7,16 +7,19 @@ import Footer from "@/components/Footer";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 const plans = [
-  { name: "Starter", price: "₦1,500", duration: "1 Month", features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Email Support"] },
-  { name: "Pro", price: "₦5,000", duration: "4 Months", popular: true, features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Priority Support", "Save 17%"] },
-  { name: "Annual", price: "₦18,000", duration: "1 Year", features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Priority Support", "Save 50%"] },
+  { name: "Starter", price: 1500, duration: "1 Month", months: 1, features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Email Support"] },
+  { name: "Pro", price: 5000, duration: "4 Months", months: 4, popular: true, features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Priority Support", "Save 17%"] },
+  { name: "Annual", price: 18000, duration: "1 Year", months: 12, features: ["1 WhatsApp Instance", "Group Management", "Chat Commands", "Priority Support", "Save 50%"] },
 ];
 
 const Pricing = () => {
   const [user, setUser] = useState<any>(null);
+  const [purchasing, setPurchasing] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -24,6 +27,31 @@ const Pricing = () => {
       else setUser(session.user);
     });
   }, [navigate]);
+
+  const handlePurchase = async (plan: typeof plans[0]) => {
+    setPurchasing(plan.name);
+    try {
+      const res = await supabase.functions.invoke("initialize-payment", {
+        body: {
+          amount: plan.price,
+          plan_type: plan.name,
+          plan_duration_months: plan.months,
+        },
+      });
+
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data as any;
+
+      if (data.authorization_url) {
+        window.location.href = data.authorization_url;
+      } else {
+        throw new Error("No payment URL returned");
+      }
+    } catch (err: any) {
+      toast({ title: "Payment failed", description: err.message, variant: "destructive" });
+    }
+    setPurchasing(null);
+  };
 
   if (!user) return null;
 
@@ -60,7 +88,7 @@ const Pricing = () => {
                 <h3 className="font-display text-xl font-semibold mb-1">{plan.name}</h3>
                 <p className="text-muted-foreground text-sm mb-4">{plan.duration}</p>
                 <div className="mb-6">
-                  <span className="text-4xl font-display font-bold">{plan.price}</span>
+                  <span className="text-4xl font-display font-bold">₦{plan.price.toLocaleString()}</span>
                 </div>
                 <ul className="space-y-3 mb-8">
                   {plan.features.map(f => (
@@ -73,8 +101,10 @@ const Pricing = () => {
                 <Button
                   className={`w-full ${plan.popular ? "gradient-primary border-0 text-primary-foreground shadow-glow" : ""}`}
                   variant={plan.popular ? "default" : "outline"}
+                  onClick={() => handlePurchase(plan)}
+                  disabled={purchasing !== null}
                 >
-                  Choose Plan <ArrowRight className="ml-2 h-4 w-4" />
+                  {purchasing === plan.name ? "Processing..." : "Choose Plan"} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </motion.div>
             ))}

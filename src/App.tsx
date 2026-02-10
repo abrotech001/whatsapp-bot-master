@@ -9,6 +9,8 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Pricing from "./pages/Pricing";
 import Profile from "./pages/Profile";
+import PaymentCallback from "./pages/PaymentCallback";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/payment-callback" element={<PaymentCallback />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
