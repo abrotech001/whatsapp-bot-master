@@ -38,6 +38,7 @@ const Dashboard = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [creatingAdminInstance, setCreatingAdminInstance] = useState(false);
   const [activeTab, setActiveTab] = useState<"instances" | "transactions" | "plans">("instances");
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -82,12 +83,28 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate, fetchData]);
 
+  const handleAdminCreateInstance = async () => {
+    setCreatingAdminInstance(true);
+    try {
+      const res = await supabase.functions.invoke("admin-create-instance", {
+        body: { plan_type: "Admin Pro", plan_duration_months: 12 },
+      });
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data as any;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Instance created!", description: "New admin instance ready for pairing." });
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    }
+    setCreatingAdminInstance(false);
+  };
+
   const handlePair = async () => {
     if (!phoneNumber || !selectedInstance) return;
     const fullNumber = countryCode + phoneNumber;
     setPairing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("pair-instance", {
         body: { instance_id: selectedInstance, phone_number: fullNumber },
       });
@@ -124,7 +141,6 @@ const Dashboard = () => {
   };
 
   const activeInstances = instances.filter(i => i.status === "active");
-  const expiredInstances = instances.filter(i => i.status === "expired");
   const unpaired = instances.filter(i => i.status === "active" && i.phone_number === "pending");
 
   if (!user) return null;
@@ -138,9 +154,19 @@ const Dashboard = () => {
             <h1 className="font-display text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground mt-1">Manage your WhatsApp instances</p>
           </div>
-          <Button className="gradient-primary border-0 text-primary-foreground" asChild>
-            <Link to="/pricing"><Plus className="mr-2 h-4 w-4" /> New Instance</Link>
-          </Button>
+          {isAdmin ? (
+            <Button
+              className="gradient-primary border-0 text-primary-foreground"
+              onClick={handleAdminCreateInstance}
+              disabled={creatingAdminInstance}
+            >
+              <Plus className="mr-2 h-4 w-4" /> {creatingAdminInstance ? "Creating..." : "Create Instance"}
+            </Button>
+          ) : (
+            <Button className="gradient-primary border-0 text-primary-foreground" asChild>
+              <Link to="/pricing"><Plus className="mr-2 h-4 w-4" /> New Instance</Link>
+            </Button>
+          )}
         </div>
 
         {/* Stats */}
@@ -184,10 +210,14 @@ const Dashboard = () => {
                   <Wifi className="h-8 w-8 text-primary-foreground" />
                 </div>
                 <h3 className="font-display text-xl font-semibold mb-2">No instances yet</h3>
-                <p className="text-muted-foreground mb-6">Purchase a plan to create your first WhatsApp instance.</p>
-                <Button className="gradient-primary border-0 text-primary-foreground shadow-glow" asChild>
-                  <Link to="/pricing">View Plans <ArrowRight className="ml-2 h-4 w-4" /></Link>
-                </Button>
+                <p className="text-muted-foreground mb-6">
+                  {isAdmin ? "Create your first instance using the button above." : "Purchase a plan to create your first WhatsApp instance."}
+                </p>
+                {!isAdmin && (
+                  <Button className="gradient-primary border-0 text-primary-foreground shadow-glow" asChild>
+                    <Link to="/pricing">View Plans <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  </Button>
+                )}
               </motion.div>
             ) : (
               instances.map((inst, i) => (
@@ -290,9 +320,7 @@ const Dashboard = () => {
       {/* Pair Dialog */}
       <Dialog open={pairDialogOpen} onOpenChange={setPairDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Pair WhatsApp Number</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Pair WhatsApp Number</DialogTitle></DialogHeader>
           {pairingCode ? (
             <div className="text-center py-6">
               <p className="text-sm text-muted-foreground mb-2">Your pairing code:</p>
@@ -333,9 +361,7 @@ const Dashboard = () => {
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Instance</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Delete Instance</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">This will disconnect the WhatsApp session and mark the instance as deleted. This action cannot be undone.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>

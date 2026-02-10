@@ -1,10 +1,12 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Shield, Zap, Users, ArrowRight, Smartphone, Bot, Settings } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import heroImage from "@/assets/hero-image.jpg";
+import { supabase } from "@/integrations/supabase/client";
 
 const features = [
   { icon: Bot, title: "Smart Bot Control", desc: "Manage WhatsApp groups directly from chat commands. No complex dashboards needed." },
@@ -20,6 +22,22 @@ const steps = [
 ];
 
 const Index = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const ctaLink = isLoggedIn ? "/dashboard" : "/signup";
+  const ctaText = isLoggedIn ? "Go to Dashboard" : "Get Started";
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -29,11 +47,7 @@ const Index = () => {
         <div className="absolute inset-0 gradient-hero opacity-5" />
         <div className="container mx-auto px-4 relative">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
               <span className="inline-block px-4 py-1.5 rounded-full bg-secondary text-secondary-foreground text-sm font-medium mb-6">
                 🚀 WhatsApp Management Made Easy
               </span>
@@ -47,8 +61,8 @@ const Index = () => {
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button size="lg" className="gradient-primary border-0 text-primary-foreground shadow-glow" asChild>
-                  <Link to="/signup">
-                    Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                  <Link to={ctaLink}>
+                    {ctaText} <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
@@ -57,12 +71,7 @@ const Index = () => {
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="relative"
-            >
+            <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.7, delay: 0.2 }} className="relative">
               <div className="relative rounded-2xl overflow-hidden shadow-glow">
                 <img src={heroImage} alt="WHATMEBOT Dashboard" className="w-full rounded-2xl" />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent" />
@@ -86,12 +95,7 @@ const Index = () => {
       {/* Features */}
       <section className="py-20 bg-secondary/30">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-14"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-14">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Everything You Need to <span className="text-gradient">Manage WhatsApp</span>
             </h2>
@@ -102,14 +106,7 @@ const Index = () => {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-card rounded-xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-border group"
-              >
+              <motion.div key={f.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="bg-card rounded-xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-border group">
                 <div className="h-12 w-12 rounded-lg gradient-primary flex items-center justify-center mb-4 group-hover:animate-pulse-glow">
                   <f.icon className="h-6 w-6 text-primary-foreground" />
                 </div>
@@ -124,30 +121,16 @@ const Index = () => {
       {/* How it works */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-14"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-14">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               How It <span className="text-gradient">Works</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              Get started in three simple steps
-            </p>
+            <p className="text-muted-foreground max-w-xl mx-auto">Get started in three simple steps</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8">
             {steps.map((s, i) => (
-              <motion.div
-                key={s.num}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.15 }}
-                className="text-center"
-              >
+              <motion.div key={s.num} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.15 }} className="text-center">
                 <div className="text-6xl font-display font-bold text-gradient opacity-30 mb-4">{s.num}</div>
                 <h3 className="font-display font-semibold text-xl mb-2">{s.title}</h3>
                 <p className="text-muted-foreground">{s.desc}</p>
@@ -155,15 +138,10 @@ const Index = () => {
             ))}
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mt-12"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mt-12">
             <Button size="lg" className="gradient-primary border-0 text-primary-foreground shadow-glow" asChild>
-              <Link to="/signup">
-                Start Now <ArrowRight className="ml-2 h-4 w-4" />
+              <Link to={ctaLink}>
+                {ctaText} <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </motion.div>

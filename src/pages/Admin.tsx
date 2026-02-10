@@ -2,10 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Users, CreditCard, Wifi, Trash2, Shield, Ban } from "lucide-react";
+import { Users, CreditCard, Wifi, Trash2, Shield, Ban, Mail, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { motion } from "framer-motion";
 
@@ -13,12 +17,19 @@ const Admin = () => {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"users" | "instances" | "transactions">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "instances" | "transactions" | "email">("users");
   const [users, setUsers] = useState<any[]>([]);
   const [instances, setInstances] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [deleteDialog, setDeleteDialog] = useState<{ type: string; id: string; label: string } | null>(null);
   const [processing, setProcessing] = useState(false);
+
+  // Email sender state
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -52,7 +63,6 @@ const Admin = () => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { navigate("/login"); return; }
       setUser(session.user);
-      // Check admin role
       const { data } = await supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" as any });
       if (!data) { navigate("/dashboard"); toast({ title: "Access denied", variant: "destructive" }); return; }
       setIsAdmin(true);
@@ -84,6 +94,29 @@ const Admin = () => {
     }
     setProcessing(false);
     setDeleteDialog(null);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailTo || !emailSubject || !emailBody) {
+      toast({ title: "Missing fields", description: "Please fill in all email fields.", variant: "destructive" });
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      const res = await supabase.functions.invoke("send-admin-email", {
+        body: { to: emailTo, subject: emailSubject, body: emailBody },
+      });
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data as any;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Email sent!", description: `Email delivered to ${emailTo}` });
+      setEmailTo("");
+      setEmailSubject("");
+      setEmailBody("");
+    } catch (err: any) {
+      toast({ title: "Send failed", description: err.message, variant: "destructive" });
+    }
+    setSendingEmail(false);
   };
 
   if (!isAdmin || !user) return null;
@@ -124,9 +157,10 @@ const Admin = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-secondary/50 rounded-lg p-1 w-fit">
-          {(["users", "instances", "transactions"] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${activeTab === tab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+        <div className="flex gap-1 mb-6 bg-secondary/50 rounded-lg p-1 w-fit flex-wrap">
+          {(["users", "instances", "transactions", "email"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize flex items-center gap-1.5 ${activeTab === tab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              {tab === "email" && <Mail className="h-3.5 w-3.5" />}
               {tab}
             </button>
           ))}
@@ -236,6 +270,64 @@ const Admin = () => {
                   </table>
                 </div>
               </div>
+            )}
+
+            {activeTab === "email" && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border border-border shadow-card p-6 max-w-2xl">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 rounded-lg gradient-primary flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-bold">Send Email</h2>
+                    <p className="text-xs text-muted-foreground">From: admin@whatsmebot.name.ng</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <Label>To</Label>
+                    <Select value={emailTo} onValueChange={setEmailTo}>
+                      <SelectTrigger><SelectValue placeholder="Select a user email" /></SelectTrigger>
+                      <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.user_id} value={u.email}>{u.email}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Subject</Label>
+                    <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Email subject" maxLength={200} />
+                  </div>
+                  <div>
+                    <Label>Body</Label>
+                    <Textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} placeholder="Write your message here..." rows={6} maxLength={5000} />
+                  </div>
+
+                  {/* Preview */}
+                  {emailSubject && emailBody && (
+                    <div className="border border-border rounded-lg p-4 bg-muted/30">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Preview</p>
+                      <div className="bg-background rounded-md p-4 border border-border">
+                        <div className="text-center mb-3">
+                          <span className="text-primary font-bold text-lg">WHATMEBOT</span>
+                          <p className="text-[10px] text-muted-foreground">Official Communication</p>
+                        </div>
+                        <div className="border-l-4 border-primary pl-3">
+                          <p className="font-semibold text-sm mb-1">{emailSubject}</p>
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">{emailBody}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button onClick={handleSendEmail} disabled={sendingEmail || !emailTo || !emailSubject || !emailBody} className="gradient-primary border-0 text-primary-foreground w-full">
+                    <Send className="mr-2 h-4 w-4" />
+                    {sendingEmail ? "Sending..." : "Send Email"}
+                  </Button>
+                </div>
+              </motion.div>
             )}
           </>
         )}

@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -8,68 +7,63 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { email, username } = await req.json();
+    // Verify admin
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) throw new Error("Unauthorized");
 
-    if (!email) {
-      throw new Error("Missing required field: email");
-    }
-
-    const code = generateOTP();
-
-    // Store OTP in database
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    await adminClient.from("email_verifications").insert({
-      email: email.toLowerCase(),
-      code,
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) throw new Error("Unauthorized");
+
+    // Check admin role
+    const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    if (!isAdmin) throw new Error("Admin access required");
+
+    const { to, subject, body } = await req.json();
+    if (!to || !subject || !body) throw new Error("Missing to, subject, or body");
 
     const messageId = `<${crypto.randomUUID()}@whatsmebot.name.ng>`;
     const dateStr = new Date().toUTCString();
 
     const html = `
-      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-        <div style="text-align: center; margin-bottom: 32px;">
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 24px;">
           <h1 style="color: #6C2BD9; margin: 0; font-size: 28px;">WHATMEBOT</h1>
+          <p style="color: #9ca3af; font-size: 12px; margin: 4px 0 0;">Official Communication</p>
         </div>
-        <div style="background: #f9fafb; border-radius: 12px; padding: 32px; text-align: center;">
-          <h2 style="margin: 0 0 8px; color: #111827; font-size: 20px;">Verify Your Email</h2>
-          <p style="color: #6b7280; margin: 0 0 24px; font-size: 14px;">
-            Hi${username ? ` ${username}` : ''}, use the code below to complete your registration.
-          </p>
-          <div style="background: #ffffff; border: 2px dashed #6C2BD9; border-radius: 8px; padding: 16px; margin: 0 auto; display: inline-block;">
-            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #6C2BD9;">${code}</span>
-          </div>
-          <p style="color: #9ca3af; margin: 24px 0 0; font-size: 12px;">This code expires in 10 minutes.</p>
+        <div style="background: #f9fafb; border-radius: 12px; padding: 32px; border-left: 4px solid #6C2BD9;">
+          <h2 style="margin: 0 0 16px; color: #111827; font-size: 18px;">${subject}</h2>
+          <div style="color: #374151; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${body}</div>
         </div>
-        <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-          If you didn't sign up for WHATMEBOT, you can safely ignore this email.
+        <p style="text-align: center; color: #9ca3af; font-size: 11px; margin-top: 24px;">
+          This email was sent by WHATMEBOT Administration. Do not reply to this email.
         </p>
       </div>
     `;
 
-    // Build raw email with proper headers to ensure Message-ID is included
+    // Admin SMTP credentials
+    const smtpHost = "s2.whitelabelclouds.com";
+    const smtpPort = 465;
+    const smtpUser = "admin@whatsmebot.name.ng";
+    const smtpPass = "Ayos 12345..&";
+
     const boundary = `----=_Part_${crypto.randomUUID().replace(/-/g, '')}`;
-    const smtpUser = Deno.env.get("SMTP_USER")!;
-    
+
     const rawHeaders = [
-      `From: WHATMEBOT <${smtpUser}>`,
-      `To: ${email}`,
-      `Subject: ${code} is your WHATMEBOT verification code`,
+      `From: WHATMEBOT Admin <${smtpUser}>`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
       `Message-ID: ${messageId}`,
       `Date: ${dateStr}`,
       `MIME-Version: 1.0`,
@@ -81,7 +75,7 @@ serve(async (req: Request) => {
       `Content-Type: text/plain; charset=utf-8`,
       `Content-Transfer-Encoding: 7bit`,
       ``,
-      `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
+      body,
       `--${boundary}`,
       `Content-Type: text/html; charset=utf-8`,
       `Content-Transfer-Encoding: 7bit`,
@@ -89,11 +83,6 @@ serve(async (req: Request) => {
       html,
       `--${boundary}--`,
     ].join("\r\n");
-
-    // Connect via raw SMTP using Deno's TCP
-    const smtpHost = Deno.env.get("SMTP_HOST")!;
-    const smtpPort = Number(Deno.env.get("SMTP_PORT") || 465);
-    const smtpPass = Deno.env.get("SMTP_PASS")!;
 
     const conn = await Deno.connectTls({ hostname: smtpHost, port: smtpPort });
     const encoder = new TextEncoder();
@@ -110,25 +99,16 @@ serve(async (req: Request) => {
       return await readResponse();
     }
 
-    // SMTP handshake
-    await readResponse(); // greeting
-    await sendCmd(`EHLO whatsmebot.name.ng`);
-
-    // AUTH LOGIN
+    await readResponse();
+    await sendCmd("EHLO whatsmebot.name.ng");
     await sendCmd("AUTH LOGIN");
     await sendCmd(btoa(smtpUser));
     await sendCmd(btoa(smtpPass));
-
-    // MAIL FROM / RCPT TO
     await sendCmd(`MAIL FROM:<${smtpUser}>`);
-    await sendCmd(`RCPT TO:<${email}>`);
-
-    // DATA
+    await sendCmd(`RCPT TO:<${to}>`);
     await sendCmd("DATA");
     const fullMessage = rawHeaders + "\r\n\r\n" + rawBody + "\r\n.";
-    const dataResp = await sendCmd(fullMessage);
-    console.log("DATA response:", dataResp);
-
+    await sendCmd(fullMessage);
     await sendCmd("QUIT");
     conn.close();
 
@@ -137,7 +117,7 @@ serve(async (req: Request) => {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
-    console.error("Email send error:", error);
+    console.error("Admin email error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },

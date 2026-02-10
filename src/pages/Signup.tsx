@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,13 @@ const Signup = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Redirect if already logged in
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate("/dashboard");
+    });
+  }, [navigate]);
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (username.length < 3) {
@@ -27,6 +34,32 @@ const Signup = () => {
       return;
     }
     setLoading(true);
+
+    // Check if email already exists in profiles
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", email.toLowerCase())
+      .maybeSingle();
+
+    if (existing) {
+      setLoading(false);
+      toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
+      return;
+    }
+
+    // Check if username is taken
+    const { data: usernameExists } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", username.toLowerCase())
+      .maybeSingle();
+
+    if (usernameExists) {
+      setLoading(false);
+      toast({ title: "Username taken", description: "This username is already in use. Please choose another.", variant: "destructive" });
+      return;
+    }
 
     // Sign up (user will be unconfirmed)
     const { error } = await supabase.auth.signUp({
@@ -40,7 +73,12 @@ const Signup = () => {
 
     if (error) {
       setLoading(false);
-      toast({ title: "Signup failed", description: error.message, variant: "destructive" });
+      // Handle "User already registered" from Supabase
+      if (error.message?.toLowerCase().includes("already registered")) {
+        toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
+      } else {
+        toast({ title: "Signup failed", description: error.message, variant: "destructive" });
+      }
       return;
     }
 
