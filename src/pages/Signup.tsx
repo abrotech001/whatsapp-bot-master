@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
 
 const Signup = () => {
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,11 +17,18 @@ const Signup = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (username.length < 3) {
+      toast({ title: "Invalid username", description: "Username must be at least 3 characters.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { username },
+      },
     });
     setLoading(false);
     if (error) {
@@ -41,6 +49,11 @@ const Signup = () => {
               <p className="text-sm text-muted-foreground">Get started with WHATMEBOT today</p>
             </div>
             <form onSubmit={handleSignup} className="space-y-4">
+              <div>
+                <Label htmlFor="username">Username</Label>
+                <Input id="username" type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} placeholder="your_username" minLength={3} required />
+                <p className="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and underscores only</p>
+              </div>
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
