@@ -28,6 +28,7 @@ const Dashboard = () => {
   const [instances, setInstances] = useState<Tables<"instances">[]>([]);
   const [transactions, setTransactions] = useState<Tables<"transactions">[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [pairDialogOpen, setPairDialogOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
   const [countryCode, setCountryCode] = useState("234");
@@ -57,10 +58,16 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
+    const checkAdmin = async (userId: string) => {
+      const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+      setIsAdmin(!!data);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/login");
       else {
         setUser(session.user);
+        checkAdmin(session.user.id);
         fetchData();
       }
     });
@@ -68,6 +75,7 @@ const Dashboard = () => {
       if (!session) navigate("/login");
       else {
         setUser(session.user);
+        checkAdmin(session.user.id);
         fetchData();
       }
     });
@@ -138,8 +146,8 @@ const Dashboard = () => {
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {[
-            { label: "Total Instances", value: instances.length, icon: Wifi },
-            { label: "Active", value: activeInstances.length, icon: Wifi },
+            { label: "Total Instances", value: isAdmin ? "∞" : instances.length, icon: Wifi },
+            { label: "Active", value: isAdmin ? "∞" : activeInstances.length, icon: Wifi },
             { label: "Expired / Deleted", value: instances.filter(i => i.status !== "active").length, icon: WifiOff },
           ].map((stat, i) => (
             <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-card rounded-xl p-5 border border-border shadow-card">
