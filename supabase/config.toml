@@ -1,1 +1,16 @@
 project_id = "ynjeyivrutvzetskzwvf"
+
+[functions.initialize-payment]
+verify_jwt = false
+
+[functions.verify-payment]
+verify_jwt = false
+
+[functions.pair-instance]
+verify_jwt = false
+
+[functions.delete-instance]
+verify_jwt = false
+
+[functions.admin]
+verify_jwt = false
