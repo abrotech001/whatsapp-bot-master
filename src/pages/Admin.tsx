@@ -13,16 +13,45 @@ import { Users, CreditCard, Wifi, Trash2, Shield, Ban, Mail, Send } from "lucide
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { motion } from "framer-motion";
 
+interface AdminUser {
+  id?: string;
+  user_id: string;
+  email: string;
+  created_at: string;
+}
+
+interface AdminInstance {
+  id: string;
+  user_id: string;
+  phone_number: string;
+  plan_type: string;
+  status: string;
+  expires_at: string;
+}
+
+interface AdminTransaction {
+  id: string;
+  user_id: string;
+  created_at: string;
+  plan_type: string;
+  amount: number;
+  status: string;
+  payment_reference?: string;
+}
+
+type DeleteDialogType = { type: string; id: string; label: string } | null;
+
 const Admin = () => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"users" | "instances" | "transactions" | "email">("users");
-  const [users, setUsers] = useState<any[]>([]);
-  const [instances, setInstances] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [deleteDialog, setDeleteDialog] = useState<{ type: string; id: string; label: string } | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [instances, setInstances] = useState<AdminInstance[]>([]);
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogType>(null);
   const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Email sender state
   const [emailTo, setEmailTo] = useState("");
@@ -33,30 +62,40 @@ const Admin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const adminCall = useCallback(async (action: string, body?: any) => {
+  const adminCall = useCallback(async (action: string, body?: Record<string, unknown>) => {
     const method = body ? "POST" : "GET";
-    const res = await supabase.functions.invoke(`admin?action=${action}`, {
-      method: method as any,
-      body: body || undefined,
-    });
-    if (res.error) throw new Error(res.error.message);
-    return res.data;
+    try {
+      const res = await supabase.functions.invoke(`admin?action=${action}`, {
+        method: method as any,
+        body: body || undefined,
+      });
+      if (res.error) throw new Error(res.error.message);
+      return res.data;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Admin call failed";
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
   }, []);
 
   const fetchAll = useCallback(async () => {
     try {
+      setError(null);
       const [u, i, t] = await Promise.all([
         adminCall("users"),
         adminCall("all-instances"),
         adminCall("all-transactions"),
       ]);
-      setUsers(u || []);
-      setInstances(i || []);
-      setTransactions(t || []);
-    } catch (err: any) {
-      console.error("Admin fetch error:", err);
+      setUsers((u as AdminUser[]) || []);
+      setInstances((i as AdminInstance[]) || []);
+      setTransactions((t as AdminTransaction[]) || []);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to fetch admin data";
+      setError(errorMsg);
+      console.error("Admin fetch error:", errorMsg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [adminCall]);
 
   useEffect(() => {
@@ -75,12 +114,14 @@ const Admin = () => {
     try {
       await adminCall("delete-user", { user_id: userId });
       toast({ title: "User deleted" });
-      fetchAll();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      await fetchAll();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to delete user";
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
+    } finally {
+      setProcessing(false);
+      setDeleteDialog(null);
     }
-    setProcessing(false);
-    setDeleteDialog(null);
   };
 
   const handleUpdateInstance = async (instanceId: string, status: string) => {
@@ -88,12 +129,14 @@ const Admin = () => {
     try {
       await adminCall("update-instance", { instance_id: instanceId, status });
       toast({ title: `Instance ${status}` });
-      fetchAll();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      await fetchAll();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to update instance";
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
+    } finally {
+      setProcessing(false);
+      setDeleteDialog(null);
     }
-    setProcessing(false);
-    setDeleteDialog(null);
   };
 
   const handleSendEmail = async () => {

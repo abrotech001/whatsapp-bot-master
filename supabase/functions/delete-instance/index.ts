@@ -18,28 +18,24 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const supabase = createClient(
+    const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
+      console.error("[Delete] Auth error:", authErr);
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
-    const userId = claimsData.claims.sub;
+    const userId = user.id;
+    console.log("[Delete] Authenticated user:", userId);
 
     const { instance_id } = await req.json();
     if (!instance_id) {
       return new Response(JSON.stringify({ error: "Missing instance_id" }), { status: 400, headers: corsHeaders });
     }
-
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     // Verify instance belongs to user
     const { data: instance, error: instErr } = await adminClient
@@ -50,29 +46,41 @@ serve(async (req) => {
       .maybeSingle();
 
     if (instErr || !instance) {
+      console.error("[Delete] Instance error:", instErr);
       return new Response(JSON.stringify({ error: "Instance not found" }), { status: 404, headers: corsHeaders });
     }
+
+    console.log("[Delete] Found instance:", instance.id, "Phone:", instance.phone_number);
 
     // Call WhatsApp delete API if phone is set
     if (instance.phone_number && instance.phone_number !== "pending") {
       const WHATSME_AUTH = Deno.env.get("WHATSME_AUTH_KEY");
+      const WHATSME_URL = Deno.env.get("WHATSME_API_URL") || "http://mrcloverblah.seyori.name.ng:2001";
       try {
+        console.log("[Delete] Calling WhatsApp API to unpair:", instance.phone_number);
         await fetch(
-          `http://mrcloverblah.seyori.name.ng:2001/delpair?jid=${encodeURIComponent(instance.phone_number)}`,
+          `${WHATSME_URL}/delpair?jid=${encodeURIComponent(instance.phone_number)}`,
           {
             headers: { "x-whatsme-auth": WHATSME_AUTH || "" },
           }
         );
       } catch (e) {
-        console.error("Delete pair API error (non-fatal):", e);
+        console.error("[Delete] Unpair API error (non-fatal):", e);
       }
     }
 
     // Mark instance as deleted
-    await adminClient
+    const { error: updateErr } = await adminClient
       .from("instances")
       .update({ status: "deleted" })
       .eq("id", instance_id);
+    
+    if (updateErr) {
+      console.error("[Delete] Update error:", updateErr);
+      throw updateErr;
+    }
+    
+    console.log("[Delete] Instance marked as deleted:", instance_id);
 
     return new Response(
       JSON.stringify({ success: true }),
