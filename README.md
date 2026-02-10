@@ -1,8 +1,44 @@
-# Welcome to your Lovable project
+# WHATMEBOT - WhatsApp Instance Management Platform
 
-## Project info
+A modern, full-featured WhatsApp instance management system with Supabase backend, Stripe/Paystack payments, and real-time instance pairing.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
+
+- **Multi-Instance Management**: Create and manage multiple WhatsApp instances from a single dashboard
+- **Instant Pairing**: Quick QR code-based pairing system for WhatsApp numbers
+- **Payment Integration**: Flexible pricing tiers with Stripe/Paystack integration
+- **Admin Dashboard**: Full admin panel for user and instance management
+- **Real-time Monitoring**: Track instance status, transactions, and user activity
+- **User Profiles**: Secure profile management with password change functionality
+- **Authentication**: Supabase Auth with email verification
+- **Type Safety**: Full TypeScript implementation with proper error handling
+
+## Tech Stack
+
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Auth, Functions)
+- **Payments**: Paystack/Stripe integration
+- **Animations**: Framer Motion
+- **Forms**: React Hook Form + Zod validation
+- **Data**: TanStack Query (React Query)
+
+## Project Structure
+
+```
+src/
+├── pages/           # Route pages (Index, Dashboard, Admin, Profile, etc.)
+├── components/      # Reusable UI components
+│   ├── ui/         # shadcn/ui components
+│   ├── Navbar.tsx
+│   ├── Footer.tsx
+│   └── ErrorBoundary.tsx
+├── integrations/
+│   └── supabase/   # Supabase client and types
+├── hooks/          # Custom React hooks
+├── assets/         # Images and static files
+└── App.tsx         # Main app with routing
+```
 
 ## How can I edit this code?
 
@@ -50,19 +86,79 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
+## Environment Variables
 
-This project is built with:
+Create a `.env.local` file with:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_key
+VITE_PAYSTACK_PUBLIC_KEY=your_paystack_key
+```
+
+## Getting Started
+
+```sh
+# Install dependencies
+npm i
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+## Core Pages & Routes
+
+- `/` - Landing page with features and CTAs
+- `/login` - User authentication
+- `/signup` - New account registration with OTP verification
+- `/dashboard` - Main user dashboard for instance management
+- `/pricing` - Pricing plans and payment initiation
+- `/profile` - User profile settings and security options
+- `/admin` - Admin dashboard (requires admin role)
+- `/payment-callback` - Payment verification endpoint
+- `/404` - 404 error page
+
+## Key Components
+
+### Dashboard
+- Instance management with pairing and deletion
+- Transaction history
+- Plan information
+- Admin capabilities for admin users
+
+### Admin Panel
+- User management
+- Instance monitoring
+- Transaction tracking
+- Email broadcast system
+
+### Error Handling
+- Global ErrorBoundary for app-level error handling
+- Try-catch blocks with proper error messages
+- User-friendly error toasts
+
+## Code Quality
+
+- **Type Safety**: Full TypeScript with proper interfaces
+- **Error Handling**: Comprehensive error handling and validation
+- **Performance**: Code splitting and optimized builds
+- **Responsive**: Mobile-first design with responsive layouts
+- **Accessibility**: Semantic HTML and ARIA attributes
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Simply open [v0](https://v0.dev) and publish your project. Alternatively:
+
+```sh
+npm run build
+# Deploy the dist/ folder to your hosting service
+```
 
 ## Can I connect a custom domain to my Lovable project?
 

@@ -23,8 +23,19 @@ const countryCodes = [
   { code: "233", country: "Ghana" },
 ];
 
+interface User {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+}
+
+interface ApiResponse {
+  error?: string;
+  pairing_code?: string;
+}
+
 const Dashboard = () => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [instances, setInstances] = useState<Tables<"instances">[]>([]);
   const [transactions, setTransactions] = useState<Tables<"transactions">[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +51,7 @@ const Dashboard = () => {
   const [deleting, setDeleting] = useState(false);
   const [creatingAdminInstance, setCreatingAdminInstance] = useState(false);
   const [activeTab, setActiveTab] = useState<"instances" | "transactions" | "plans">("instances");
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -85,59 +97,71 @@ const Dashboard = () => {
 
   const handleAdminCreateInstance = async () => {
     setCreatingAdminInstance(true);
+    setError(null);
     try {
       const res = await supabase.functions.invoke("admin-create-instance", {
         body: { plan_type: "Admin Pro", plan_duration_months: 12 },
       });
       if (res.error) throw new Error(res.error.message);
-      const data = res.data as any;
+      const data = res.data as ApiResponse;
       if (data?.error) throw new Error(data.error);
       toast({ title: "Instance created!", description: "New admin instance ready for pairing." });
-      fetchData();
-    } catch (err: any) {
-      toast({ title: "Failed", description: err.message, variant: "destructive" });
+      await fetchData();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMsg);
+      toast({ title: "Failed", description: errorMsg, variant: "destructive" });
+    } finally {
+      setCreatingAdminInstance(false);
     }
-    setCreatingAdminInstance(false);
   };
 
   const handlePair = async () => {
     if (!phoneNumber || !selectedInstance) return;
     const fullNumber = countryCode + phoneNumber;
     setPairing(true);
+    setError(null);
     try {
       const res = await supabase.functions.invoke("pair-instance", {
         body: { instance_id: selectedInstance, phone_number: fullNumber },
       });
       if (res.error) throw new Error(res.error.message);
-      const data = res.data as any;
+      const data = res.data as ApiResponse;
       if (data.pairing_code) {
         setPairingCode(data.pairing_code);
         toast({ title: "Pairing code received!", description: `Code: ${data.pairing_code}` });
-        fetchData();
+        await fetchData();
       } else {
         throw new Error(data.error || "Failed to get pairing code");
       }
-    } catch (err: any) {
-      toast({ title: "Pairing failed", description: err.message, variant: "destructive" });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Pairing failed";
+      setError(errorMsg);
+      toast({ title: "Pairing failed", description: errorMsg, variant: "destructive" });
+    } finally {
+      setPairing(false);
     }
-    setPairing(false);
   };
 
   const handleDelete = async () => {
     if (!deleteInstanceId) return;
     setDeleting(true);
+    setError(null);
     try {
       const res = await supabase.functions.invoke("delete-instance", {
         body: { instance_id: deleteInstanceId },
       });
       if (res.error) throw new Error(res.error.message);
       toast({ title: "Instance deleted" });
-      fetchData();
-    } catch (err: any) {
-      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+      await fetchData();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Delete failed";
+      setError(errorMsg);
+      toast({ title: "Delete failed", description: errorMsg, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
     }
-    setDeleting(false);
-    setDeleteDialogOpen(false);
   };
 
   const activeInstances = instances.filter(i => i.status === "active");
