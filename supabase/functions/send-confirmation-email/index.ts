@@ -58,7 +58,7 @@ serve(async (req: Request) => {
         </p>
       </div>
     `;
-
+    
     const client = new SMTPClient({
       connection: {
         hostname: Deno.env.get("SMTP_HOST")!,
@@ -71,12 +71,20 @@ serve(async (req: Request) => {
       },
     });
 
+    
+    // Add this helper at the top or inside your serve function
+    const messageId = `<${crypto.randomUUID()}@whatsmebot.name.ng>`; //
+
     await client.send({
-      from: `WHATMEBOT <${Deno.env.get("SMTP_USER")}>`,
+      from: `WHATMEBOT - <${Deno.env.get("SMTP_USER")}>`,
       to: email,
       subject: `${code} is your WHATMEBOT verification code`,
       content: "auto",
       html,
+      headers: {
+      "Message-ID": messageId,
+      "Date": new Date().toUTCString(),
+      },
     });
 
     await client.close();
