@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -13,7 +14,6 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Verify admin
     const authHeader = req.headers.get("authorization");
     if (!authHeader) throw new Error("Unauthorized");
 
@@ -26,15 +26,11 @@ serve(async (req: Request) => {
     const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
     if (authErr || !user) throw new Error("Unauthorized");
 
-    // Check admin role
     const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) throw new Error("Admin access required");
 
     const { to, subject, body } = await req.json();
     if (!to || !subject || !body) throw new Error("Missing to, subject, or body");
-
-    const messageId = `<${crypto.randomUUID()}@whatsmebot.name.ng>`;
-    const dateStr = new Date().toUTCString();
 
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
@@ -52,65 +48,35 @@ serve(async (req: Request) => {
       </div>
     `;
 
-    // Admin SMTP credentials
-    const smtpHost = "s2.whitelabelclouds.com";
-    const smtpPort = 465;
-    const smtpUser = "admin@whatsmebot.name.ng";
-    const smtpPass = "Ayos 12345..&";
+    const smtpHost = Deno.env.get("ADMIN_SMTP_HOST")!;
+    const smtpPort = Number(Deno.env.get("ADMIN_SMTP_PORT") || 465);
+    const smtpUser = Deno.env.get("ADMIN_SMTP_USER")!;
+    const smtpPass = Deno.env.get("ADMIN_SMTP_PASS")!;
 
-    const boundary = `----=_Part_${crypto.randomUUID().replace(/-/g, '')}`;
+    const client = new SmtpClient();
+    await client.connectTLS({
+      hostname: smtpHost,
+      port: smtpPort,
+      username: smtpUser,
+      password: smtpPass,
+    });
 
-    const rawHeaders = [
-      `From: WHATMEBOT Admin <${smtpUser}>`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      `Message-ID: ${messageId}`,
-      `Date: ${dateStr}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ].join("\r\n");
+    const messageId = `${crypto.randomUUID()}@whatsmebot.name.ng`;
 
-    const rawBody = [
-      `--${boundary}`,
-      `Content-Type: text/plain; charset=utf-8`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      body,
-      `--${boundary}`,
-      `Content-Type: text/html; charset=utf-8`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      html,
-      `--${boundary}--`,
-    ].join("\r\n");
+    await client.send({
+      from: smtpUser,
+      to: to,
+      subject: subject,
+      content: body,
+      html: html,
+      headers: {
+        "Message-ID": `<${messageId}>`,
+      },
+    });
 
-    const conn = await Deno.connectTls({ hostname: smtpHost, port: smtpPort });
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    await client.close();
 
-    async function readResponse(): Promise<string> {
-      const buf = new Uint8Array(4096);
-      const n = await conn.read(buf);
-      return decoder.decode(buf.subarray(0, n || 0));
-    }
-
-    async function sendCmd(cmd: string): Promise<string> {
-      await conn.write(encoder.encode(cmd + "\r\n"));
-      return await readResponse();
-    }
-
-    await readResponse();
-    await sendCmd("EHLO whatsmebot.name.ng");
-    await sendCmd("AUTH LOGIN");
-    await sendCmd(btoa(smtpUser));
-    await sendCmd(btoa(smtpPass));
-    await sendCmd(`MAIL FROM:<${smtpUser}>`);
-    await sendCmd(`RCPT TO:<${to}>`);
-    await sendCmd("DATA");
-    const fullMessage = rawHeaders + "\r\n\r\n" + rawBody + "\r\n.";
-    await sendCmd(fullMessage);
-    await sendCmd("QUIT");
-    conn.close();
+    console.log("Admin email sent to:", to);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
