@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -19,10 +19,7 @@ serve(async (req: Request) => {
 
   try {
     const { email, username } = await req.json();
-
-    if (!email) {
-      throw new Error("Missing required field: email");
-    }
+    if (!email) throw new Error("Missing required field: email");
 
     const code = generateOTP();
 
@@ -37,9 +34,6 @@ serve(async (req: Request) => {
       code,
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
-
-    const messageId = `<${crypto.randomUUID()}@whatsmebot.name.ng>`;
-    const dateStr = new Date().toUTCString();
 
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
@@ -62,75 +56,35 @@ serve(async (req: Request) => {
       </div>
     `;
 
-    // Build raw email with proper headers to ensure Message-ID is included
-    const boundary = `----=_Part_${crypto.randomUUID().replace(/-/g, '')}`;
-    const smtpUser = Deno.env.get("SMTP_USER")!;
-    
-    const rawHeaders = [
-      `From: WHATMEBOT <${smtpUser}>`,
-      `To: ${email}`,
-      `Subject: ${code} is your WHATMEBOT verification code`,
-      `Message-ID: ${messageId}`,
-      `Date: ${dateStr}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ].join("\r\n");
-
-    const rawBody = [
-      `--${boundary}`,
-      `Content-Type: text/plain; charset=utf-8`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
-      `--${boundary}`,
-      `Content-Type: text/html; charset=utf-8`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      html,
-      `--${boundary}--`,
-    ].join("\r\n");
-
-    // Connect via raw SMTP using Deno's TCP
     const smtpHost = Deno.env.get("SMTP_HOST")!;
     const smtpPort = Number(Deno.env.get("SMTP_PORT") || 465);
+    const smtpUser = Deno.env.get("SMTP_USER")!;
     const smtpPass = Deno.env.get("SMTP_PASS")!;
 
-    const conn = await Deno.connectTls({ hostname: smtpHost, port: smtpPort });
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    const client = new SmtpClient();
+    await client.connectTLS({
+      hostname: smtpHost,
+      port: smtpPort,
+      username: smtpUser,
+      password: smtpPass,
+    });
 
-    async function readResponse(): Promise<string> {
-      const buf = new Uint8Array(4096);
-      const n = await conn.read(buf);
-      return decoder.decode(buf.subarray(0, n || 0));
-    }
+    const messageId = `${crypto.randomUUID()}@whatsmebot.name.ng`;
 
-    async function sendCmd(cmd: string): Promise<string> {
-      await conn.write(encoder.encode(cmd + "\r\n"));
-      return await readResponse();
-    }
+    await client.send({
+      from: smtpUser,
+      to: email,
+      subject: `${code} is your WHATMEBOT verification code`,
+      content: `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
+      html: html,
+      headers: {
+        "Message-ID": `<${messageId}>`,
+      },
+    });
 
-    // SMTP handshake
-    await readResponse(); // greeting
-    await sendCmd(`EHLO whatsmebot.name.ng`);
+    await client.close();
 
-    // AUTH LOGIN
-    await sendCmd("AUTH LOGIN");
-    await sendCmd(btoa(smtpUser));
-    await sendCmd(btoa(smtpPass));
-
-    // MAIL FROM / RCPT TO
-    await sendCmd(`MAIL FROM:<${smtpUser}>`);
-    await sendCmd(`RCPT TO:<${email}>`);
-
-    // DATA
-    await sendCmd("DATA");
-    const fullMessage = rawHeaders + "\r\n\r\n" + rawBody + "\r\n.";
-    const dataResp = await sendCmd(fullMessage);
-    console.log("DATA response:", dataResp);
-
-    await sendCmd("QUIT");
-    conn.close();
+    console.log("Email sent successfully to:", email);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
