@@ -123,15 +123,21 @@ const Signup = () => {
         body: { email, username },
       });
       
+      console.log("[v0] Email function response:", res);
+      
       if (res.error) {
-        console.error("[v0] Function error:", res.error);
-        throw new Error(res.error.message || "Failed to send email");
+        console.error("[v0] Function invocation error:", res.error);
+        throw new Error(res.error.message || "Failed to invoke email function");
       }
       
       const data = res.data as any;
+      console.log("[v0] Email function response data:", data);
+      
       if (data?.error) {
         console.error("[v0] Email function returned error:", data.error);
-        throw new Error(data.error);
+        console.error("[v0] Error details:", data.details);
+        // Show specific error message from Edge Function
+        throw new Error(data.error || data.details || "Failed to send verification email");
       }
 
       console.log("[v0] Confirmation email sent successfully");
@@ -158,15 +164,20 @@ const Signup = () => {
         body: { email, code: otpCode },
       });
       
+      console.log("[v0] OTP verification response:", res);
+      
       if (res.error) {
-        console.error("[v0] OTP verification error:", res.error);
-        throw new Error(res.error.message || "OTP verification failed");
+        console.error("[v0] OTP invocation error:", res.error);
+        throw new Error(res.error.message || "Failed to verify OTP");
       }
       
       const data = res.data as any;
+      console.log("[v0] OTP response data:", data);
+      
       if (data?.error) {
         console.error("[v0] OTP function error:", data.error);
-        throw new Error(data.error);
+        console.error("[v0] OTP error details:", data.details);
+        throw new Error(data.error || data.details || "Invalid or expired code");
       }
 
       console.log("[v0] OTP verified, logging in...");
