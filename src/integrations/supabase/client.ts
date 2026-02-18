@@ -17,8 +17,8 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase = createClient<Database>(SUPABASE_URL || "", SUPABASE_ANON_KEY || "", {
   auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+    storage: typeof window !== 'undefined' ? localStorage : undefined,
+    persistSession: typeof window !== 'undefined',
+    autoRefreshToken: typeof window !== 'undefined',
   }
 });
