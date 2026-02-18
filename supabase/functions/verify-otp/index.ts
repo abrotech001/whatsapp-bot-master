@@ -20,8 +20,8 @@ serve(async (req: Request) => {
     }
 
     const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     // Find valid OTP
