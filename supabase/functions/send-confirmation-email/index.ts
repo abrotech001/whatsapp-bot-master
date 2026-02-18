@@ -123,27 +123,28 @@ serve(async (req: Request) => {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
-    console.error("[v0] Email send error:", error.message || error);
+    console.error("[v0] Email send error:", error);
     
-    // Return detailed error message
-    let errorMessage = error.message || "Failed to send email";
+    // Return detailed error message as simple string that's easy to display
+    let errorMessage = error.message || error.toString() || "Failed to send verification email";
     
-    // Check if it's an SMTP connection error
-    if (error.message?.includes("SMTP") || error.message?.includes("TLS") || error.message?.includes("connection")) {
-      errorMessage = `SMTP Error: ${error.message}. Check your SMTP credentials (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) in Vercel environment variables.`;
+    // Make the error message user-friendly
+    if (errorMessage.includes("SMTP")) {
+      errorMessage = "Email service error: Check SMTP configuration";
+    } else if (errorMessage.includes("database") || errorMessage.includes("WHATSME_DATABASE")) {
+      errorMessage = "Database error: Could not store verification code";
+    } else if (errorMessage.includes("TLS") || errorMessage.includes("connection")) {
+      errorMessage = "Connection error: Could not connect to email server";
     }
     
-    // Check if it's a database error
-    if (error.message?.includes("database") || error.message?.includes("WHATSME_DATABASE")) {
-      errorMessage = `Database Error: ${error.message}. Check WHATSME_DATABASE_SUPABASE_URL and WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY in Vercel.`;
-    }
+    console.error("[v0] Returning error:", errorMessage);
     
-    return new Response(JSON.stringify({ 
-      error: errorMessage,
-      details: error.message 
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
+    return new Response(
+      JSON.stringify({ error: errorMessage }), 
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      }
+    );
   }
 });

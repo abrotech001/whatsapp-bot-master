@@ -119,33 +119,43 @@ const Signup = () => {
 
       // Send OTP via custom SMTP
       console.log("[v0] Sending confirmation email...");
-      const res = await supabase.functions.invoke("send-confirmation-email", {
-        body: { email, username },
-      });
+      let emailError: any = null;
       
-      console.log("[v0] Email function response:", res);
-      
-      if (res.error) {
-        console.error("[v0] Function invocation error:", res.error);
-        throw new Error(res.error.message || "Failed to invoke email function");
+      try {
+        const res = await supabase.functions.invoke("send-confirmation-email", {
+          body: { email, username },
+        });
+        
+        // Handle invocation error
+        if (res.error) {
+          emailError = res.error.message || "Failed to send email. Please try again.";
+          throw new Error(emailError);
+        }
+        
+        // Handle response error
+        const data = res.data as any;
+        if (data?.error) {
+          emailError = data.error;
+          throw new Error(emailError);
+        }
+        
+        // If we got here, email was sent successfully
+        console.log("[v0] Email sent successfully");
+        setStep("otp");
+        toast({ title: "Check your email!", description: "We sent a 6-digit code to " + email });
+        return; // Exit on success
+      } catch (smtpErr: any) {
+        emailError = smtpErr.message || "Failed to send verification email";
+        throw new Error(emailError);
       }
-      
-      const data = res.data as any;
-      console.log("[v0] Email function response data:", data);
-      
-      if (data?.error) {
-        console.error("[v0] Email function returned error:", data.error);
-        console.error("[v0] Error details:", data.details);
-        // Show specific error message from Edge Function
-        throw new Error(data.error || data.details || "Failed to send verification email");
-      }
-
-      console.log("[v0] Confirmation email sent successfully");
-      setStep("otp");
-      toast({ title: "Check your email!", description: "We sent a 6-digit code to " + email });
     } catch (err: any) {
-      console.error("[v0] Signup error:", err);
-      toast({ title: "Signup error", description: err.message || "An unexpected error occurred", variant: "destructive" });
+      console.error("[v0] Signup error:", err.message || err);
+      const errorMessage = err.message || "An unexpected error occurred. Please try again.";
+      toast({ 
+        title: "Signup Error", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     } finally {
       setLoading(false);
     }
@@ -160,25 +170,26 @@ const Signup = () => {
 
     try {
       console.log("[v0] Verifying OTP...");
+      
       const res = await supabase.functions.invoke("verify-otp", {
         body: { email, code: otpCode },
       });
       
-      console.log("[v0] OTP verification response:", res);
-      
+      // Handle function invocation error
       if (res.error) {
         console.error("[v0] OTP invocation error:", res.error);
-        throw new Error(res.error.message || "Failed to verify OTP");
+        throw new Error(res.error.message || "Failed to verify code");
       }
       
+      // Handle function response error
       const data = res.data as any;
-      console.log("[v0] OTP response data:", data);
-      
       if (data?.error) {
-        console.error("[v0] OTP function error:", data.error);
-        console.error("[v0] OTP error details:", data.details);
-        throw new Error(data.error || data.details || "Invalid or expired code");
+        console.error("[v0] OTP verification failed:", data.error);
+        throw new Error(data.error);
       }
+      
+      // If we got here, OTP was verified
+      console.log("[v0] OTP verified successfully");
 
       console.log("[v0] OTP verified, logging in...");
       // Auto-login
@@ -192,8 +203,13 @@ const Signup = () => {
       toast({ title: "Email verified!", description: "Welcome to WHATMEBOT!" });
       navigate("/pricing");
     } catch (err: any) {
-      console.error("[v0] Verification error:", err);
-      toast({ title: "Verification failed", description: err.message || "Invalid or expired code", variant: "destructive" });
+      console.error("[v0] Verification error:", err.message || err);
+      const errorMsg = err.message || "Failed to verify code. Please try again.";
+      toast({ 
+        title: "Verification Failed", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     } finally {
       setVerifying(false);
     }
@@ -203,19 +219,31 @@ const Signup = () => {
     setLoading(true);
     try {
       console.log("[v0] Resending confirmation email...");
+      
       const res = await supabase.functions.invoke("send-confirmation-email", {
         body: { email, username },
       });
       
+      // Handle invocation error
       if (res.error) {
-        console.error("[v0] Resend error:", res.error);
-        throw new Error(res.error.message || "Failed to resend email");
+        throw new Error(res.error.message || "Failed to resend code");
       }
       
-      toast({ title: "Code resent!", description: "Check your email for a new code." });
+      // Handle response error
+      const data = res.data as any;
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      
+      toast({ title: "Code Resent!", description: "Check your email for a new code." });
     } catch (err: any) {
-      console.error("[v0] Resend error:", err);
-      toast({ title: "Resend failed", description: err.message || "Could not resend code", variant: "destructive" });
+      console.error("[v0] Resend error:", err.message || err);
+      const errorMsg = err.message || "Could not resend code. Please try again.";
+      toast({ 
+        title: "Resend Failed", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     } finally {
       setLoading(false);
     }

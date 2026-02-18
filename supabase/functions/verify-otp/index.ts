@@ -51,19 +51,18 @@ serve(async (req: Request) => {
 
     if (fetchErr) {
       console.error("[v0] Database error looking up OTP:", fetchErr);
+      const errorMsg = "Could not verify code. Please try again or request a new code.";
       return new Response(
-        JSON.stringify({ 
-          error: "Database error: " + (fetchErr.message || "Could not verify OTP"),
-          details: fetchErr.message
-        }),
+        JSON.stringify({ error: errorMsg }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
     if (!verification) {
       console.log("[v0] OTP not found or expired for:", email.toLowerCase());
+      const errorMsg = "Invalid or expired code. Codes expire after 10 minutes.";
       return new Response(
-        JSON.stringify({ error: "Invalid or expired code. The code may have expired (codes last 10 minutes) or is incorrect." }),
+        JSON.stringify({ error: errorMsg }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -117,18 +116,17 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("[v0] OTP verification error:", error.message || error);
     
-    let errorMessage = error.message || "Failed to verify OTP";
+    let errorMessage = error.message || "Failed to verify code. Please try again.";
     
-    // Check for specific database errors
-    if (error.message?.includes("database") || error.message?.includes("WHATSME_DATABASE")) {
-      errorMessage = `Database Error: ${error.message}. Check WHATSME_DATABASE_SUPABASE_URL and WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY in Vercel.`;
+    // Make error messages user-friendly
+    if (errorMessage.includes("not set")) {
+      errorMessage = "Server configuration error. Please contact support.";
+    } else if (errorMessage.includes("database")) {
+      errorMessage = "Database error. Please try again.";
     }
     
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        details: error.message
-      }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
