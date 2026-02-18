@@ -17,8 +17,8 @@ serve(async (req: Request) => {
     if (!authHeader) throw new Error("Unauthorized: Missing authorization header");
 
     const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const token = authHeader.replace("Bearer ", "");

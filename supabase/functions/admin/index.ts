@@ -19,8 +19,8 @@ serve(async (req) => {
     }
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -33,8 +33,8 @@ serve(async (req) => {
 
     // Check admin role
     const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: userId, _role: "admin" });
