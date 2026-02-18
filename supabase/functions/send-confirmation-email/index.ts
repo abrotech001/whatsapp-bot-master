@@ -18,7 +18,20 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Log all environment variables for debugging
+    const envVars = {
+      SMTP_HOST: !!Deno.env.get("SMTP_HOST"),
+      SMTP_PORT: !!Deno.env.get("SMTP_PORT"),
+      SMTP_USER: !!Deno.env.get("SMTP_USER"),
+      SMTP_PASS: !!Deno.env.get("SMTP_PASS"),
+      WHATSME_DATABASE_SUPABASE_URL: !!Deno.env.get("WHATSME_DATABASE_SUPABASE_URL"),
+      WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY"),
+    };
+    console.log("[v0] Environment variables check:", JSON.stringify(envVars));
+
     const { email, username } = await req.json();
+    console.log("[v0] Received signup request for:", email);
+    
     if (!email) throw new Error("Missing required field: email");
 
     const code = generateOTP();
@@ -56,21 +69,40 @@ serve(async (req: Request) => {
       </div>
     `;
 
-    const smtpHost = Deno.env.get("SMTP_HOST")!;
+    const smtpHost = Deno.env.get("SMTP_HOST");
     const smtpPort = Number(Deno.env.get("SMTP_PORT") || 465);
-    const smtpUser = Deno.env.get("SMTP_USER")!;
-    const smtpPass = Deno.env.get("SMTP_PASS")!;
+    const smtpUser = Deno.env.get("SMTP_USER");
+    const smtpPass = Deno.env.get("SMTP_PASS");
+
+    // Validate SMTP configuration
+    if (!smtpHost) {
+      console.error("[v0] ERROR: SMTP_HOST is not set in Vercel environment variables");
+      throw new Error("SMTP_HOST environment variable is missing. Please add it to Vercel Settings > Environment Variables");
+    }
+    if (!smtpUser) {
+      console.error("[v0] ERROR: SMTP_USER is not set in Vercel environment variables");
+      throw new Error("SMTP_USER environment variable is missing. Please add it to Vercel Settings > Environment Variables");
+    }
+    if (!smtpPass) {
+      console.error("[v0] ERROR: SMTP_PASS is not set in Vercel environment variables");
+      throw new Error("SMTP_PASS environment variable is missing. Please add it to Vercel Settings > Environment Variables");
+    }
+
+    console.log("[v0] SMTP Config - Host:", smtpHost, "Port:", smtpPort, "User:", smtpUser?.substring(0, 3) + "***");
 
     const client = new SmtpClient();
+    console.log("[v0] Connecting to SMTP server...");
     await client.connectTLS({
       hostname: smtpHost,
       port: smtpPort,
       username: smtpUser,
       password: smtpPass,
     });
+    console.log("[v0] SMTP connected successfully");
 
     const messageId = `${crypto.randomUUID()}@whatsmebot.name.ng`;
 
+    console.log("[v0] Sending email to:", email);
     await client.send({
       from: smtpUser,
       to: email,
@@ -81,18 +113,35 @@ serve(async (req: Request) => {
         "Message-ID": `<${messageId}>`,
       },
     });
+    console.log("[v0] Email sent successfully to:", email);
 
     await client.close();
-
-    console.log("Email sent successfully to:", email);
+    console.log("[v0] SMTP connection closed");
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
-    console.error("Email send error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("[v0] Email send error:", error.message || error);
+    
+    // Return detailed error message
+    let errorMessage = error.message || "Failed to send email";
+    
+    // Check if it's an SMTP connection error
+    if (error.message?.includes("SMTP") || error.message?.includes("TLS") || error.message?.includes("connection")) {
+      errorMessage = `SMTP Error: ${error.message}. Check your SMTP credentials (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) in Vercel environment variables.`;
+    }
+    
+    // Check if it's a database error
+    if (error.message?.includes("database") || error.message?.includes("WHATSME_DATABASE")) {
+      errorMessage = `Database Error: ${error.message}. Check WHATSME_DATABASE_SUPABASE_URL and WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY in Vercel.`;
+    }
+    
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      details: error.message 
+    }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
