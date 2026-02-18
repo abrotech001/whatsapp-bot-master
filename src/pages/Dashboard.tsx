@@ -56,42 +56,85 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
-    const { data: instData } = await supabase
-      .from("instances")
-      .select("*")
-      .order("created_at", { ascending: false });
-    setInstances(instData || []);
+    try {
+      console.log("[v0] Fetching instances and transactions...");
+      const { data: instData, error: instError } = await supabase
+        .from("instances")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (instError) {
+        console.error("[v0] Error fetching instances:", instError);
+        setError(instError.message);
+      } else {
+        setInstances(instData || []);
+        setError(null);
+      }
 
-    const { data: txnData } = await supabase
-      .from("transactions")
-      .select("*")
-      .order("created_at", { ascending: false });
-    setTransactions(txnData || []);
-    setLoading(false);
+      const { data: txnData, error: txnError } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (txnError) {
+        console.error("[v0] Error fetching transactions:", txnError);
+        setError(txnError.message);
+      } else {
+        setTransactions(txnData || []);
+      }
+      
+      console.log("[v0] Data fetched successfully");
+    } catch (err) {
+      console.error("[v0] Unexpected error fetching data:", err);
+      setError("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     const checkAdmin = async (userId: string) => {
-      const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-      setIsAdmin(!!data);
+      try {
+        console.log("[v0] Checking admin status for user:", userId);
+        const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+        if (error) {
+          console.error("[v0] Admin check error:", error);
+        } else {
+          console.log("[v0] Admin status:", !!data);
+          setIsAdmin(!!data);
+        }
+      } catch (err) {
+        console.error("[v0] Unexpected error checking admin:", err);
+      }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate("/login");
-      else {
+      if (!session) {
+        console.log("[v0] No session, redirecting to login");
+        navigate("/login");
+      } else {
+        console.log("[v0] Session found, setting user:", session.user.email);
         setUser(session.user);
         checkAdmin(session.user.id);
         fetchData();
       }
     });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) navigate("/login");
-      else {
+    
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("[v0] Session error:", error);
+        navigate("/login");
+      } else if (!session) {
+        console.log("[v0] No active session");
+        navigate("/login");
+      } else {
+        console.log("[v0] Active session found, loading data");
         setUser(session.user);
         checkAdmin(session.user.id);
         fetchData();
       }
     });
+    
     return () => subscription.unsubscribe();
   }, [navigate, fetchData]);
 

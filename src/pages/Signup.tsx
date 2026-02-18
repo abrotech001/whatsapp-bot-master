@@ -22,122 +22,192 @@ const Signup = () => {
 
   // Redirect if already logged in
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/dashboard");
-    });
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log("[v0] User already logged in, redirecting to dashboard");
+          navigate("/dashboard");
+        }
+      } catch (err) {
+        console.error("[v0] Error checking session:", err);
+      }
+    };
+    checkAuth();
   }, [navigate]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    if (!username || !email || !password) {
+      toast({ title: "Missing fields", description: "Please fill in all fields", variant: "destructive" });
+      return;
+    }
+    
     if (username.length < 3) {
       toast({ title: "Invalid username", description: "Username must be at least 3 characters.", variant: "destructive" });
       return;
     }
+    
+    if (password.length < 6) {
+      toast({ title: "Invalid password", description: "Password must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    
     setLoading(true);
 
-    // Check if email already exists in profiles
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
-
-    if (existing) {
-      setLoading(false);
-      toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
-      return;
-    }
-
-    // Check if username is taken
-    const { data: usernameExists } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", username.toLowerCase())
-      .maybeSingle();
-
-    if (usernameExists) {
-      setLoading(false);
-      toast({ title: "Username taken", description: "This username is already in use. Please choose another.", variant: "destructive" });
-      return;
-    }
-
-    // Sign up (user will be unconfirmed)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { username },
-      },
-    });
-
-    if (error) {
-      setLoading(false);
-      // Handle "User already registered" from Supabase
-      if (error.message?.toLowerCase().includes("already registered")) {
-        toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
-      } else {
-        toast({ title: "Signup failed", description: error.message, variant: "destructive" });
-      }
-      return;
-    }
-
-    // Send OTP via custom SMTP
     try {
+      console.log("[v0] Starting signup for:", email);
+      
+      // Check if email already exists in profiles
+      const { data: existing, error: checkError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+
+      if (checkError && checkError.code !== "PGRST116") {
+        throw checkError;
+      }
+
+      if (existing) {
+        toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      // Check if username is taken
+      const { data: usernameExists, error: usernameError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", username.toLowerCase())
+        .maybeSingle();
+
+      if (usernameError && usernameError.code !== "PGRST116") {
+        throw usernameError;
+      }
+
+      if (usernameExists) {
+        toast({ title: "Username taken", description: "This username is already in use. Please choose another.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      // Sign up (user will be unconfirmed)
+      console.log("[v0] Creating auth user...");
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { username },
+        },
+      });
+
+      if (error) {
+        console.error("[v0] Signup error:", error);
+        // Handle "User already registered" from Supabase
+        if (error.message?.toLowerCase().includes("already registered")) {
+          toast({ title: "Account exists", description: "An account with this email already exists. Please sign in.", variant: "destructive" });
+        } else {
+          toast({ title: "Signup failed", description: error.message || "Unknown error", variant: "destructive" });
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Send OTP via custom SMTP
+      console.log("[v0] Sending confirmation email...");
       const res = await supabase.functions.invoke("send-confirmation-email", {
         body: { email, username },
       });
-      if (res.error) throw new Error(res.error.message);
+      
+      if (res.error) {
+        console.error("[v0] Function error:", res.error);
+        throw new Error(res.error.message || "Failed to send email");
+      }
+      
       const data = res.data as any;
-      if (data?.error) throw new Error(data.error);
-    } catch (err: any) {
-      setLoading(false);
-      toast({ title: "Failed to send verification email", description: err.message, variant: "destructive" });
-      return;
-    }
+      if (data?.error) {
+        console.error("[v0] Email function returned error:", data.error);
+        throw new Error(data.error);
+      }
 
-    setLoading(false);
-    setStep("otp");
-    toast({ title: "Check your email!", description: "We sent a 6-digit code to " + email });
+      console.log("[v0] Confirmation email sent successfully");
+      setStep("otp");
+      toast({ title: "Check your email!", description: "We sent a 6-digit code to " + email });
+    } catch (err: any) {
+      console.error("[v0] Signup error:", err);
+      toast({ title: "Signup error", description: err.message || "An unexpected error occurred", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyOTP = async () => {
-    if (otpCode.length !== 6) return;
+    if (otpCode.length !== 6) {
+      toast({ title: "Invalid code", description: "Please enter a 6-digit code", variant: "destructive" });
+      return;
+    }
     setVerifying(true);
 
     try {
+      console.log("[v0] Verifying OTP...");
       const res = await supabase.functions.invoke("verify-otp", {
         body: { email, code: otpCode },
       });
-      if (res.error) throw new Error(res.error.message);
+      
+      if (res.error) {
+        console.error("[v0] OTP verification error:", res.error);
+        throw new Error(res.error.message || "OTP verification failed");
+      }
+      
       const data = res.data as any;
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        console.error("[v0] OTP function error:", data.error);
+        throw new Error(data.error);
+      }
 
+      console.log("[v0] OTP verified, logging in...");
       // Auto-login
       const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
-      if (loginErr) throw new Error(loginErr.message);
+      if (loginErr) {
+        console.error("[v0] Login after OTP error:", loginErr);
+        throw new Error(loginErr.message || "Login failed");
+      }
 
+      console.log("[v0] Logged in successfully");
       toast({ title: "Email verified!", description: "Welcome to WHATMEBOT!" });
       navigate("/pricing");
     } catch (err: any) {
-      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
+      console.error("[v0] Verification error:", err);
+      toast({ title: "Verification failed", description: err.message || "Invalid or expired code", variant: "destructive" });
+    } finally {
+      setVerifying(false);
     }
-
-    setVerifying(false);
   };
 
   const handleResend = async () => {
     setLoading(true);
     try {
+      console.log("[v0] Resending confirmation email...");
       const res = await supabase.functions.invoke("send-confirmation-email", {
         body: { email, username },
       });
-      if (res.error) throw new Error(res.error.message);
+      
+      if (res.error) {
+        console.error("[v0] Resend error:", res.error);
+        throw new Error(res.error.message || "Failed to resend email");
+      }
+      
       toast({ title: "Code resent!", description: "Check your email for a new code." });
     } catch (err: any) {
-      toast({ title: "Resend failed", description: err.message, variant: "destructive" });
+      console.error("[v0] Resend error:", err);
+      toast({ title: "Resend failed", description: err.message || "Could not resend code", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

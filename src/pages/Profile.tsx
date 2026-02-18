@@ -24,15 +24,32 @@ const Profile = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      try {
+        console.log("[v0] Checking auth in Profile...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("[v0] Auth error:", error);
+          navigate("/login");
+          return;
+        }
+        
+        if (!session) {
+          console.log("[v0] No session found");
+          navigate("/login");
+          return;
+        }
+        
+        console.log("[v0] Session found, setting profile data");
+        setUser(session.user);
+        setEmail(session.user.email || "");
+        setFullName(session.user.user_metadata?.full_name || "");
+      } catch (err) {
+        console.error("[v0] Unexpected error checking auth:", err);
         navigate("/login");
-        return;
+      } finally {
+        setLoading(false);
       }
-      setUser(session.user);
-      setEmail(session.user.email || "");
-      setFullName(session.user.user_metadata?.full_name || "");
-      setLoading(false);
     };
 
     checkAuth();
@@ -40,22 +57,33 @@ const Profile = () => {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast({ title: "Error", description: "User not found", variant: "destructive" });
+      return;
+    }
 
     setSaving(true);
     try {
+      console.log("[v0] Updating profile...");
       const { error } = await supabase.auth.updateUser({
         email,
         data: { full_name: fullName },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[v0] Profile update error:", error);
+        throw error;
+      }
+      
       setUser({ ...user, email, user_metadata: { ...user.user_metadata, full_name: fullName } });
       toast({ title: "Success", description: "Profile updated successfully" });
+      console.log("[v0] Profile updated successfully");
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("[v0] Update error:", err);
+      toast({ title: "Error", description: err.message || "Failed to update profile", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -78,20 +106,38 @@ const Profile = () => {
 
     setSaving(true);
     try {
+      console.log("[v0] Updating password...");
       const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
+      if (error) {
+        console.error("[v0] Password update error:", error);
+        throw error;
+      }
       toast({ title: "Success", description: "Password updated successfully" });
       setNewPassword("");
       setConfirmPassword("");
+      console.log("[v0] Password updated successfully");
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("[v0] Password update error:", err);
+      toast({ title: "Error", description: err.message || "Failed to update password", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/login");
+    try {
+      console.log("[v0] Logging out...");
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("[v0] Logout error:", error);
+        throw error;
+      }
+      console.log("[v0] Logout successful");
+      navigate("/login");
+    } catch (err: any) {
+      console.error("[v0] Logout error:", err);
+      toast({ title: "Error", description: err.message || "Failed to logout", variant: "destructive" });
+    }
   };
 
   if (loading) {

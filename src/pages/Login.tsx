@@ -16,20 +16,45 @@ const Login = () => {
 
   // Redirect if already logged in
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/dashboard");
-    });
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log("[v0] User already logged in, redirecting to dashboard");
+          navigate("/dashboard");
+        }
+      } catch (err) {
+        console.error("[v0] Error checking session:", err);
+      }
+    };
+    checkAuth();
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast({ title: "Missing credentials", description: "Please enter both email and password", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
-    } else {
-      navigate("/dashboard");
+    try {
+      console.log("[v0] Attempting login for:", email);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        console.error("[v0] Login error:", error);
+        toast({ title: "Login failed", description: error.message || "Invalid credentials", variant: "destructive" });
+      } else {
+        console.log("[v0] Login successful, redirecting");
+        navigate("/dashboard");
+      }
+    } catch (err: any) {
+      console.error("[v0] Unexpected error during login:", err);
+      toast({ title: "Error", description: err.message || "An unexpected error occurred", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
