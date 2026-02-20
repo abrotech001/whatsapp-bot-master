@@ -1,15 +1,18 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
+const defaultHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Content-Type": "application/json", // Added this here so errors return as JSON too!
 };
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    // OPTIONS requests shouldn't have a content type usually, but keeping it simple is fine
+    return new Response(null, { headers: defaultHeaders });
   }
 
   try {
@@ -30,8 +33,14 @@ serve(async (req) => {
     }
     const userId = user.id;
     const userEmail = user.email;
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid or missing JSON body" }), { status: 400, headers: defaultHeaders });
+    }
 
-    const { amount, plan_type, plan_duration_months } = await req.json();
+    const { amount, plan_type, plan_duration_months } = body;
 
     if (!amount || !plan_type || !plan_duration_months) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: corsHeaders });
