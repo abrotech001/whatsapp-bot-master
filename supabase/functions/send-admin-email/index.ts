@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,25 +53,23 @@ serve(async (req: Request) => {
     const smtpUser = Deno.env.get("ADMIN_SMTP_USER")!;
     const smtpPass = Deno.env.get("ADMIN_SMTP_PASS")!;
 
-    const client = new SmtpClient();
-    await client.connectTLS({
-      hostname: smtpHost,
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
       port: smtpPort,
-      username: smtpUser,
-      password: smtpPass,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
     });
 
-    const messageId = `${crypto.randomUUID()}@whatsmebot.name.ng`;
-
-    await client.send({
+    await transporter.sendMail({
       from: smtpUser,
       to: to,
       subject: subject,
-      content: body,
+      text: body,
       html: html,
     });
-
-    await client.close();
 
     console.log("Admin email sent to:", to);
 
