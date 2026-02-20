@@ -28,10 +28,10 @@ const Pricing = () => {
     });
   }, [navigate]);
 
-  const handlePurchase = async (plan: typeof plans[0]) => {
+    const handlePurchase = async (plan: typeof plans[0]) => {
     setPurchasing(plan.name);
     try {
-      const res = await supabase.functions.invoke("initialize-payment", {
+      const { data, error } = await supabase.functions.invoke("initialize-payment", {
         body: {
           amount: plan.price,
           plan_type: plan.name,
@@ -39,19 +39,58 @@ const Pricing = () => {
         },
       });
 
-      if (res.error) throw new Error(res.error.message);
-      const data = res.data as any;
+      // 1. Safely handle Supabase invocation errors
+      if (error) {
+        console.error("Supabase Invoke Error:", error);
+        let errorMessage = "Payment initialization failed";
+        
+        // Supabase hides non-200 Edge Function responses inside error.context
+        if (error.context && typeof error.context.json === 'function') {
+          try {
+            const errorBody = await error.context.json();
+            // Try to grab the exact `{ error: "..." }` you sent from your Edge Function
+            errorMessage = errorBody.error || errorMessage;
+          } catch (e) {
+            // Ignore JSON parsing errors
+          }
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+        
+        // Throw a guaranteed string
+        throw new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
+      }
 
+      // 2. Handle missing data gracefully
+      if (!data) throw new Error("No response received from server.");
+      if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+
+      // 3. Success redirect
       if (data.authorization_url) {
         window.location.href = data.authorization_url;
       } else {
-        throw new Error("No payment URL returned");
+        throw new Error("No payment URL returned.");
       }
+
     } catch (err: any) {
-      toast({ title: "Payment failed", description: err.message, variant: "destructive" });
+      console.error("Payment Flow Error:", err);
+      
+      // GUARANTEE the description is a string to prevent the React blank screen crash
+      const safeDescription = err instanceof Error 
+        ? err.message 
+        : (typeof err === 'string' ? err : JSON.stringify(err));
+      
+      toast({ 
+        title: "Payment failed", 
+        description: safeDescription, 
+        variant: "destructive" 
+      });
+    } finally {
+      // Moved this to a finally block so it always resets, even if it crashes
+      setPurchasing(null); 
     }
-    setPurchasing(null);
   };
+
 
   if (!user) return null;
 
