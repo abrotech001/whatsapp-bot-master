@@ -31,12 +31,20 @@ const Pricing = () => {
     const handlePurchase = async (plan: typeof plans[0]) => {
     setPurchasing(plan.name);
     try {
+            // 1. Grab the token manually
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // 2. Destructure data/error and force the header
       const { data, error } = await supabase.functions.invoke("initialize-payment", {
         body: {
           amount: plan.price,
           plan_type: plan.name,
           plan_duration_months: plan.months,
         },
+        // THIS IS THE CRUCIAL PART THAT WAS MISSING BEFORE:
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`
+        }
       });
 
       // 1. Safely handle Supabase invocation errors
