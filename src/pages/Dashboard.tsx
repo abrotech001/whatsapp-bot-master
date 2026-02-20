@@ -93,18 +93,33 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    const checkAdmin = async (userId: string) => {
+    const checkAdmin = async (userEmail: string, userId: string) => {
       try {
-        console.log("[v0] Checking admin status for user:", userId);
+        console.log("[v0] Checking admin status for user:", userEmail);
+        // Admin email - hardcoded for reliability
+        const ADMIN_EMAIL = "abrahantemitope247@gmail.com";
+        const isAdminByEmail = (userEmail || "").toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
+        
+        console.log("[v0] Admin check - User email:", userEmail?.toLowerCase(), "Admin email:", ADMIN_EMAIL.toLowerCase(), "Match:", isAdminByEmail);
+        
+        if (isAdminByEmail) {
+          console.log("[v0] Admin verified by email match");
+          setIsAdmin(true);
+          return;
+        }
+        
+        // Fallback to role check
         const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
         if (error) {
           console.error("[v0] Admin check error:", error);
+          setIsAdmin(false);
         } else {
-          console.log("[v0] Admin status:", !!data);
+          console.log("[v0] Admin status by role:", !!data);
           setIsAdmin(!!data);
         }
       } catch (err) {
         console.error("[v0] Unexpected error checking admin:", err);
+        setIsAdmin(false);
       }
     };
 
@@ -128,7 +143,7 @@ const Dashboard = () => {
         }
         
         setUser(session.user);
-        checkAdmin(session.user.id);
+        checkAdmin(session.user.email || "", session.user.id);
         fetchData();
       }
     });
@@ -156,7 +171,7 @@ const Dashboard = () => {
         }
         
         setUser(session.user);
-        checkAdmin(session.user.id);
+        checkAdmin(session.user.email || "", session.user.id);
         fetchData();
       }
     });
