@@ -22,9 +22,9 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
-    );
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+);
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
