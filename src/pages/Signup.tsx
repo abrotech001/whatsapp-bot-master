@@ -122,18 +122,21 @@ const Signup = () => {
       let emailError: any = null;
       
       try {
-        const res = await supabase.functions.invoke("send-confirmation-email", {
-          body: { email, username },
+        const res = await fetch("/api/send-confirmation-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, username }),
         });
-        
-        // Handle invocation error
-        if (res.error) {
-          emailError = res.error.message || "Failed to send email. Please try again.";
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          emailError = errorData.error || "Failed to send email. Please try again.";
           throw new Error(emailError);
         }
-        
-        // Handle response error
-        const data = res.data as any;
+
+        const data = await res.json();
         if (data?.error) {
           emailError = data.error;
           throw new Error(emailError);
@@ -171,18 +174,20 @@ const Signup = () => {
     try {
       console.log("[v0] Verifying OTP...");
       
-      const res = await supabase.functions.invoke("verify-otp", {
-        body: { email, code: otpCode },
+      const res = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, code: otpCode }),
       });
-      
-      // Handle function invocation error
-      if (res.error) {
-        console.error("[v0] OTP invocation error:", res.error);
-        throw new Error(res.error.message || "Failed to verify code");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to verify code");
       }
-      
-      // Handle function response error
-      const data = res.data as any;
+
+      const data = await res.json();
       if (data?.error) {
         console.error("[v0] OTP verification failed:", data.error);
         throw new Error(data.error);
@@ -220,17 +225,20 @@ const Signup = () => {
     try {
       console.log("[v0] Resending confirmation email...");
       
-      const res = await supabase.functions.invoke("send-confirmation-email", {
-        body: { email, username },
+      const res = await fetch("/api/send-confirmation-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, username }),
       });
-      
-      // Handle invocation error
-      if (res.error) {
-        throw new Error(res.error.message || "Failed to resend code");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to resend code");
       }
-      
-      // Handle response error
-      const data = res.data as any;
+
+      const data = await res.json();
       if (data?.error) {
         throw new Error(data.error);
       }

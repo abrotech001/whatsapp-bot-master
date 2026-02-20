@@ -21,11 +21,24 @@ const PaymentCallback = () => {
 
     const verify = async () => {
       try {
-        const res = await supabase.functions.invoke("verify-payment", {
-          body: { reference },
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+
+        const res = await fetch("/api/verify-payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ reference }),
         });
-        if (res.error) throw new Error(res.error.message);
-        const data = res.data as any;
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "Payment verification failed");
+        }
+
+        const data = await res.json();
         if (data.success) {
           setStatus("success");
           toast({ title: "Payment successful!", description: "Your instance has been created." });
