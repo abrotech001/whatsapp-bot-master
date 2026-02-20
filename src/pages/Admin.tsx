@@ -65,12 +65,26 @@ const Admin = () => {
   const adminCall = useCallback(async (action: string, body?: Record<string, unknown>) => {
     const method = body ? "POST" : "GET";
     try {
-      const res = await supabase.functions.invoke(`admin?action=${action}`, {
-        method: method as any,
-        body: body || undefined,
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const url = `/api/admin?action=${action}`;
+      const res = await fetch(url, {
+        method: method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: body ? JSON.stringify(body) : undefined,
       });
-      if (res.error) throw new Error(res.error.message);
-      return res.data;
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `API error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      return data;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Admin call failed";
       setError(errorMsg);
@@ -146,12 +160,23 @@ const Admin = () => {
     }
     setSendingEmail(true);
     try {
-      const res = await supabase.functions.invoke("send-admin-email", {
-        body: { to: emailTo, subject: emailSubject, body: emailBody },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch("/api/send-admin-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ to: emailTo, subject: emailSubject, body: emailBody }),
       });
-      if (res.error) throw new Error(res.error.message);
-      const data = res.data as any;
-      if (data?.error) throw new Error(data.error);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to send email");
+      }
+
       toast({ title: "Email sent!", description: `Email delivered to ${emailTo}` });
       setEmailTo("");
       setEmailSubject("");

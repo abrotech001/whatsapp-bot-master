@@ -142,11 +142,24 @@ const Dashboard = () => {
     setCreatingAdminInstance(true);
     setError(null);
     try {
-      const res = await supabase.functions.invoke("admin-create-instance", {
-        body: { plan_type: "Admin Pro", plan_duration_months: 12 },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch("/api/admin-create-instance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ plan_type: "Admin Pro", plan_duration_months: 12 }),
       });
-      if (res.error) throw new Error(res.error.message);
-      const data = res.data as ApiResponse;
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to create instance");
+      }
+
+      const data = await res.json();
       if (data?.error) throw new Error(data.error);
       toast({ title: "Instance created!", description: "New admin instance ready for pairing." });
       await fetchData();
@@ -165,15 +178,24 @@ const Dashboard = () => {
     setPairing(true);
     setError(null);
     try {
-      const res = await supabase.functions.invoke("pair-instance", {
-        body: { instance_id: selectedInstance, phone_number: fullNumber },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch("/api/pair-instance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ instance_id: selectedInstance, phone_number: fullNumber }),
       });
-      
-      if (res.error) {
-        throw new Error(res.error.message || "Function invocation failed");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to pair instance");
       }
-      
-      const data = res.data as ApiResponse;
+
+      const data = await res.json() as ApiResponse;
       
       if (data?.pairing_code) {
         setPairingCode(data.pairing_code);
@@ -197,10 +219,23 @@ const Dashboard = () => {
     setDeleting(true);
     setError(null);
     try {
-      const res = await supabase.functions.invoke("delete-instance", {
-        body: { instance_id: deleteInstanceId },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch("/api/delete-instance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ instance_id: deleteInstanceId }),
       });
-      if (res.error) throw new Error(res.error.message);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete instance");
+      }
+
       toast({ title: "Instance deleted" });
       await fetchData();
     } catch (err) {
