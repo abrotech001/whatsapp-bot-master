@@ -18,24 +18,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const supabase = createClient(
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-    }
-    const userId = claimsData.claims.sub;
-
-    // Check admin role
     const adminClient = createClient(
       Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
       Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
+    const userId = user.id;
+
+    // Check admin role
 
     const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: userId, _role: "admin" });
     if (!isAdmin) {
