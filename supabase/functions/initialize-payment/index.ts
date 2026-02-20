@@ -18,19 +18,18 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const supabase = createClient(
+    const adminClient = createClient(
       Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
-    const userId = claimsData.claims.sub;
-    const userEmail = claimsData.claims.email;
+    const userId = user.id;
+    const userEmail = user.email;
 
     const { amount, plan_type, plan_duration_months } = await req.json();
 
@@ -43,11 +42,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Payment not configured" }), { status: 500, headers: corsHeaders });
     }
 
-    // Create transaction record first
-    const adminClient = createClient(
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Create transaction record
 
     const { data: txn, error: txnError } = await adminClient
       .from("transactions")

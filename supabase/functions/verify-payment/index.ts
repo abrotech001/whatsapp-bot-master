@@ -18,18 +18,17 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const supabase = createClient(
+    const adminClient = createClient(
       Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
-    const userId = claimsData.claims.sub;
+    const userId = user.id;
 
     const { reference } = await req.json();
     if (!reference) {
@@ -44,10 +43,7 @@ serve(async (req) => {
     });
     const verifyData = await verifyRes.json();
 
-    const adminClient = createClient(
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_URL")!,
-      Deno.env.get("WHATSME_DATABASE_SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // adminClient already created above
 
     if (!verifyData.status || verifyData.data.status !== "success") {
       await adminClient.from("transactions").update({ status: "failed" }).eq("id", reference);
