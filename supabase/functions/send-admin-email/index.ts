@@ -69,9 +69,6 @@ serve(async (req: Request) => {
       subject: subject,
       content: body,
       html: html,
-      headers: {
-        "Message-ID": `<${messageId}>`,
-      },
     });
 
     await client.close();

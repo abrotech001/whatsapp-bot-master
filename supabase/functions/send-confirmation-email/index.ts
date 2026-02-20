@@ -109,9 +109,6 @@ serve(async (req: Request) => {
       subject: `${code} is your WHATMEBOT verification code`,
       content: `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
       html: html,
-      headers: {
-        "Message-ID": `<${messageId}>`,
-      },
     });
     console.log("[v0] Email sent successfully to:", email);
 
