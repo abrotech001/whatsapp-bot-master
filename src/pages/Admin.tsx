@@ -116,8 +116,23 @@ const Admin = () => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { navigate("/login"); return; }
       setUser(session.user);
-      const { data } = await supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" as any });
-      if (!data) { navigate("/dashboard"); toast({ title: "Access denied", variant: "destructive" }); return; }
+      
+      // Check if user is admin (by email or by role)
+      const adminEmail = process.env.REACT_APP_ADMIN_EMAIL || "abrahantemitope247@gmail.com";
+      const isAdminByEmail = session.user.email?.toLowerCase() === adminEmail.toLowerCase();
+      
+      if (!isAdminByEmail) {
+        // Fallback to role check
+        const { data } = await supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" as any });
+        if (!data) { 
+          console.log("[v0] User is not admin. Email:", session.user.email, "Expected:", adminEmail);
+          navigate("/dashboard"); 
+          toast({ title: "Access denied", description: "You do not have admin privileges", variant: "destructive" }); 
+          return; 
+        }
+      }
+      
+      console.log("[v0] Admin verified for:", session.user.email);
       setIsAdmin(true);
       fetchAll();
     });
