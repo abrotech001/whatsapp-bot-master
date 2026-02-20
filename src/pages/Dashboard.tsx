@@ -103,19 +103,24 @@ const Dashboard = () => {
         console.log("[v0] Admin check - User email:", userEmail?.toLowerCase(), "Admin email:", ADMIN_EMAIL.toLowerCase(), "Match:", isAdminByEmail);
         
         if (isAdminByEmail) {
-          console.log("[v0] Admin verified by email match");
+          console.log("[v0] Admin verified by email match - showing admin button");
           setIsAdmin(true);
           return;
         }
         
-        // Fallback to role check
-        const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-        if (error) {
-          console.error("[v0] Admin check error:", error);
+        // Fallback to role check (but don't fail if Supabase is empty)
+        try {
+          const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+          if (error) {
+            console.warn("[v0] Admin role check error (may be due to empty database):", error.message);
+            setIsAdmin(false);
+          } else {
+            console.log("[v0] Admin status by role:", !!data);
+            setIsAdmin(!!data);
+          }
+        } catch (rpcErr) {
+          console.warn("[v0] RPC call failed, likely due to empty database:", rpcErr);
           setIsAdmin(false);
-        } else {
-          console.log("[v0] Admin status by role:", !!data);
-          setIsAdmin(!!data);
         }
       } catch (err) {
         console.error("[v0] Unexpected error checking admin:", err);
@@ -158,8 +163,11 @@ const Dashboard = () => {
       } else {
         console.log("[v0] Active session found, loading data");
         
-        // Check if email is confirmed
-        if (!session.user.email_confirmed_at) {
+        // Check if email is confirmed (but allow admin email as bypass for development)
+        const ADMIN_EMAIL = "abrahantemitope247@gmail.com";
+        const isAdminByEmail = (session.user.email || "").toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
+        
+        if (!session.user.email_confirmed_at && !isAdminByEmail) {
           console.log("[v0] Email not confirmed for user:", session.user.email);
           navigate("/signup");
           toast({ 
