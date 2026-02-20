@@ -96,7 +96,7 @@ const Signup = () => {
 
       // Sign up (user will be unconfirmed)
       console.log("[v0] Creating auth user...");
-      const { error } = await supabase.auth.signUp({
+      const { data: signupData, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -116,6 +116,16 @@ const Signup = () => {
         setLoading(false);
         return;
       }
+
+      // Verify the user was created
+      if (!signupData?.user?.id) {
+        console.error("[v0] No user ID returned from signup");
+        toast({ title: "Signup error", description: "Account creation failed. Please try again.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      console.log("[v0] Auth user created with ID:", signupData.user.id);
 
       // Send OTP via custom SMTP
       console.log("[v0] Sending confirmation email...");

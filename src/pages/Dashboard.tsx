@@ -114,6 +114,19 @@ const Dashboard = () => {
         navigate("/login");
       } else {
         console.log("[v0] Session found, setting user:", session.user.email);
+        
+        // Check if email is confirmed
+        if (!session.user.email_confirmed_at) {
+          console.log("[v0] Email not confirmed for user:", session.user.email);
+          navigate("/signup");
+          toast({ 
+            title: "Email not verified", 
+            description: "Please verify your email first. You should have received a verification code.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
         setUser(session.user);
         checkAdmin(session.user.id);
         fetchData();
@@ -129,6 +142,19 @@ const Dashboard = () => {
         navigate("/login");
       } else {
         console.log("[v0] Active session found, loading data");
+        
+        // Check if email is confirmed
+        if (!session.user.email_confirmed_at) {
+          console.log("[v0] Email not confirmed for user:", session.user.email);
+          navigate("/signup");
+          toast({ 
+            title: "Email not verified", 
+            description: "Please verify your email first. You should have received a verification code.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
         setUser(session.user);
         checkAdmin(session.user.id);
         fetchData();
