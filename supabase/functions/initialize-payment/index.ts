@@ -28,9 +28,12 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-    }
+if (authErr || !user) {
+  return new Response(
+    JSON.stringify({ error: `Auth Failed: ${authErr?.message || "No user session"}` }), 
+    { status: 401, headers: corsHeaders }
+  );
+}
     const userId = user.id;
     const userEmail = user.email;
     let body;
