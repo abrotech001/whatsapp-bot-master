@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +18,6 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Log all environment variables for debugging
     const envVars = {
       SMTP_HOST: !!Deno.env.get("SMTP_HOST"),
       SMTP_PORT: !!Deno.env.get("SMTP_PORT"),
@@ -74,46 +73,31 @@ serve(async (req: Request) => {
     const smtpUser = Deno.env.get("SMTP_USER");
     const smtpPass = Deno.env.get("SMTP_PASS");
 
-    // Validate SMTP configuration
-    if (!smtpHost) {
-      console.error("[v0] ERROR: SMTP_HOST is not set in Vercel environment variables");
-      throw new Error("SMTP_HOST environment variable is missing. Please add it to Vercel Settings > Environment Variables");
-    }
-    if (!smtpUser) {
-      console.error("[v0] ERROR: SMTP_USER is not set in Vercel environment variables");
-      throw new Error("SMTP_USER environment variable is missing. Please add it to Vercel Settings > Environment Variables");
-    }
-    if (!smtpPass) {
-      console.error("[v0] ERROR: SMTP_PASS is not set in Vercel environment variables");
-      throw new Error("SMTP_PASS environment variable is missing. Please add it to Vercel Settings > Environment Variables");
-    }
+    if (!smtpHost) throw new Error("SMTP_HOST environment variable is missing");
+    if (!smtpUser) throw new Error("SMTP_USER environment variable is missing");
+    if (!smtpPass) throw new Error("SMTP_PASS environment variable is missing");
 
     console.log("[v0] SMTP Config - Host:", smtpHost, "Port:", smtpPort, "User:", smtpUser?.substring(0, 3) + "***");
 
-    const client = new SmtpClient();
-    console.log("[v0] Connecting to SMTP server...");
-    await client.connectTLS({
-      hostname: smtpHost,
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
       port: smtpPort,
-      username: smtpUser,
-      password: smtpPass,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
     });
-    console.log("[v0] SMTP connected successfully");
-
-    const messageId = `${crypto.randomUUID()}@whatsmebot.name.ng`;
 
     console.log("[v0] Sending email to:", email);
-    await client.send({
+    await transporter.sendMail({
       from: smtpUser,
       to: email,
       subject: `${code} is your WHATMEBOT verification code`,
-      content: `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
+      text: `Your WHATMEBOT verification code is: ${code}. It expires in 10 minutes.`,
       html: html,
     });
     console.log("[v0] Email sent successfully to:", email);
-
-    await client.close();
-    console.log("[v0] SMTP connection closed");
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -122,10 +106,8 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("[v0] Email send error:", error);
     
-    // Return detailed error message as simple string that's easy to display
     let errorMessage = error.message || error.toString() || "Failed to send verification email";
     
-    // Make the error message user-friendly
     if (errorMessage.includes("SMTP")) {
       errorMessage = "Email service error: Check SMTP configuration";
     } else if (errorMessage.includes("database") || errorMessage.includes("WHATSME_DATABASE")) {
