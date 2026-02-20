@@ -28,52 +28,35 @@ const Pricing = () => {
     });
   }, [navigate]);
 
-    const handlePurchase = async (plan: typeof plans[0]) => {
+      const handlePurchase = async (plan: typeof plans[0]) => {
     setPurchasing(plan.name);
     try {
-            // 1. Grab the token manually
       const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("You must be logged in to purchase a plan.");
+      }
 
-      // 2. Destructure data/error and force the header
-      const { data, error } = await supabase.functions.invoke("initialize-payment", {
-        body: {
+      // Hit Vercel's API instead of Lovable's Edge Function
+      const res = await fetch("/api/initialize-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
           amount: plan.price,
           plan_type: plan.name,
           plan_duration_months: plan.months,
-        },
-        // THIS IS THE CRUCIAL PART THAT WAS MISSING BEFORE:
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
+        })
       });
 
-      // 1. Safely handle Supabase invocation errors
-      if (error) {
-        console.error("Supabase Invoke Error:", error);
-        let errorMessage = "Payment initialization failed";
-        
-        // Supabase hides non-200 Edge Function responses inside error.context
-        if (error.context && typeof error.context.json === 'function') {
-          try {
-            const errorBody = await error.context.json();
-            // Try to grab the exact `{ error: "..." }` you sent from your Edge Function
-            errorMessage = errorBody.error || errorMessage;
-          } catch (e) {
-            // Ignore JSON parsing errors
-          }
-        } else {
-          errorMessage = error.message || errorMessage;
-        }
-        
-        // Throw a guaranteed string
-        throw new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Payment initialization failed");
       }
 
-      // 2. Handle missing data gracefully
-      if (!data) throw new Error("No response received from server.");
-      if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-
-      // 3. Success redirect
       if (data.authorization_url) {
         window.location.href = data.authorization_url;
       } else {
@@ -82,22 +65,13 @@ const Pricing = () => {
 
     } catch (err: any) {
       console.error("Payment Flow Error:", err);
-      
-      // GUARANTEE the description is a string to prevent the React blank screen crash
-      const safeDescription = err instanceof Error 
-        ? err.message 
-        : (typeof err === 'string' ? err : JSON.stringify(err));
-      
-      toast({ 
-        title: "Payment failed", 
-        description: safeDescription, 
-        variant: "destructive" 
-      });
+      const safeDescription = err instanceof Error ? err.message : (typeof err === 'string' ? err : JSON.stringify(err));
+      toast({ title: "Payment failed", description: safeDescription, variant: "destructive" });
     } finally {
-      // Moved this to a finally block so it always resets, even if it crashes
       setPurchasing(null); 
     }
   };
+
 
 
   if (!user) return null;
