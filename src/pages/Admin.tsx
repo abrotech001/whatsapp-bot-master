@@ -114,25 +114,33 @@ const Admin = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { navigate("/login"); return; }
+      if (!session) { 
+        console.log("[v0] No session found, redirecting to login");
+        navigate("/login"); 
+        return; 
+      }
+      
+      const userEmail = session.user.email || "";
       setUser(session.user);
       
-      // Check if user is admin (by email or by role)
-      const adminEmail = process.env.REACT_APP_ADMIN_EMAIL || "abrahantemitope247@gmail.com";
-      const isAdminByEmail = session.user.email?.toLowerCase() === adminEmail.toLowerCase();
+      // Admin email - hardcoded for reliability
+      const ADMIN_EMAIL = "abrahantemitope247@gmail.com";
+      const isAdminByEmail = userEmail.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
+      
+      console.log("[v0] Admin check - User email:", userEmail.toLowerCase(), "Admin email:", ADMIN_EMAIL.toLowerCase(), "Match:", isAdminByEmail);
       
       if (!isAdminByEmail) {
         // Fallback to role check
         const { data } = await supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" as any });
         if (!data) { 
-          console.log("[v0] User is not admin. Email:", session.user.email, "Expected:", adminEmail);
+          console.log("[v0] User is not admin by email or role. Redirecting to dashboard");
           navigate("/dashboard"); 
           toast({ title: "Access denied", description: "You do not have admin privileges", variant: "destructive" }); 
           return; 
         }
       }
       
-      console.log("[v0] Admin verified for:", session.user.email);
+      console.log("[v0] Admin verified for:", userEmail);
       setIsAdmin(true);
       fetchAll();
     });
