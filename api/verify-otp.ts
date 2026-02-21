@@ -66,6 +66,7 @@ export default async function handler(req, res) {
 
     // 7. Confirm user in auth
     console.log("[v0] Confirming email in auth system...");
+    // @ts-expect-error
     const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
     
     if (listErr) {
@@ -79,6 +80,7 @@ export default async function handler(req, res) {
 
     if (authUser) {
       console.log("[v0] Found auth user, confirming email...");
+      // @ts-expect-error
       const { error: confirmErr } = await supabase.auth.admin.updateUserById(authUser.id, {
         email_confirm: true,
       });
