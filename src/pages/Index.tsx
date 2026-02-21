@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { MessageSquare, Shield, Zap, Users, ArrowRight, Smartphone, Bot, Settings } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import heroImage from "@/assets/ahero-image.jpg";
+import heroImage from "@/assets/ahero-image.png";
 import { supabase } from "@/integrations/supabase/client";
 
 const features = [
