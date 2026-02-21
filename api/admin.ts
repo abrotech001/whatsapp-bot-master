@@ -85,6 +85,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing user_id" });
       }
 
+      // @ts-expect-error
       const { error } = await supabase.auth.admin.deleteUser(user_id);
       if (error) throw error;
       
