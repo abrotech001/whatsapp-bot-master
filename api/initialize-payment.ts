@@ -26,6 +26,7 @@ export default async function handler(req, res) {
 
     // 5. Get User from Token
     const token = authHeader.split(" ")[1];
+    // @ts-expect-error
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
 
     if (authErr || !user) {
